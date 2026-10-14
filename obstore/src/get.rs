@@ -451,17 +451,16 @@ async fn _get_ranges(
 #[pyo3(signature = (store, path, *, starts, ends=None, lengths=None, coalesce=OBJECT_STORE_COALESCE_DEFAULT))]
 pub(crate) fn get_ranges(
     py: Python,
-    store: &Bound<PyAny>,
+    store: PyObjectStore,
     path: PyPath,
     starts: Vec<u64>,
     ends: Option<Vec<u64>>,
     lengths: Option<Vec<u64>>,
     coalesce: u64,
 ) -> PyObjectStoreResult<Vec<PyBytes>> {
-    let local = store.cast::<PyLocalStore>().is_ok();
-    let store: PyObjectStore = store.extract()?;
+    let runtime = get_runtime();
     let ranges = params_to_ranges(starts, ends, lengths)?;
-    py.detach(|| block_on(local, _get_ranges(store, path, &ranges, coalesce)))
+    py.detach(|| runtime.block_on(_get_ranges(store, path, &ranges, coalesce)))
 }
 
 #[pyfunction]

@@ -103,3 +103,18 @@ def test_local_store_percent_encoded():
             f.write(content2)
 
         assert store.get(fname2).bytes() == content2
+
+
+def test_local_get_range_head(tmp_path: Path):
+    # get_range and head run without the tokio runtime on LocalStore
+    (tmp_path / "f.bin").write_bytes(bytes(range(256)))
+    store = LocalStore(tmp_path)
+
+    assert store.head("f.bin")["size"] == 256
+    assert bytes(store.get_range("f.bin", start=10, length=4)) == b"\x0a\x0b\x0c\x0d"
+    # end past EOF is clamped, like object_store does for every store
+    assert len(store.get_range("f.bin", start=250, end=1000)) == 6
+    with pytest.raises(GenericError):
+        store.get_range("f.bin", start=300, end=310)
+    with pytest.raises(FileNotFoundError):
+        store.head("missing")
