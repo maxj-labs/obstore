@@ -14,12 +14,12 @@ use pyo3::exceptions::{PyStopAsyncIteration, PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::get_runtime;
 use pyo3_bytes::PyBytes;
-use pyo3_object_store::{PyLocalStore, PyObjectStore, PyObjectStoreError, PyObjectStoreResult, PyPath};
+use pyo3_object_store::{PyObjectStore, PyObjectStoreError, PyObjectStoreResult, PyPath};
 use tokio::sync::Mutex;
 
 use crate::attributes::PyAttributes;
 use crate::list::PyObjectMeta;
-use crate::utils::block_on;
+use crate::utils::SyncStore;
 
 /// 10MB default chunk size
 const DEFAULT_BYTES_CHUNK_SIZE: usize = 10 * 1024 * 1024;
@@ -381,17 +381,15 @@ pub(crate) fn get_async(
 #[pyo3(signature = (store, path, *, start, end=None, length=None))]
 pub(crate) fn get_range(
     py: Python,
-    store: &Bound<PyAny>,
+    store: SyncStore,
     path: PyPath,
     start: u64,
     end: Option<u64>,
     length: Option<u64>,
 ) -> PyObjectStoreResult<pyo3_bytes::PyBytes> {
-    let local = store.cast::<PyLocalStore>().is_ok();
-    let store: PyObjectStore = store.extract()?;
     let range = params_to_range(start, end, length)?;
     py.detach(|| {
-        let out = block_on(local, store.as_ref().get_range(path.as_ref(), range))?;
+        let out = store.block_on(store.as_ref().get_range(path.as_ref(), range))?;
         Ok::<_, PyObjectStoreError>(pyo3_bytes::PyBytes::new(out))
     })
 }
