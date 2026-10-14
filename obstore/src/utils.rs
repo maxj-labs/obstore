@@ -13,3 +13,16 @@ impl<'py> IntoPyObject<'py> for PyNone {
         Ok(py.None().bind(py).clone())
     }
 }
+
+/// Run a store future to completion on the calling thread.
+///
+/// A native `LocalStore` needs no tokio context: without one, object_store's
+/// `maybe_spawn_blocking` runs its blocking I/O inline instead of paying two
+/// thread hops per call, which dominates small local reads.
+pub(crate) fn block_on<F: std::future::Future>(local: bool, fut: F) -> F::Output {
+    if local {
+        futures::executor::block_on(fut)
+    } else {
+        pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
+    }
+}

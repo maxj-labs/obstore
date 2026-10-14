@@ -14,11 +14,12 @@ use pyo3::exceptions::{PyStopAsyncIteration, PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::get_runtime;
 use pyo3_bytes::PyBytes;
-use pyo3_object_store::{PyObjectStore, PyObjectStoreError, PyObjectStoreResult, PyPath};
+use pyo3_object_store::{PyLocalStore, PyObjectStore, PyObjectStoreError, PyObjectStoreResult, PyPath};
 use tokio::sync::Mutex;
 
 use crate::attributes::PyAttributes;
 use crate::list::PyObjectMeta;
+use crate::utils::block_on;
 
 /// 10MB default chunk size
 const DEFAULT_BYTES_CHUNK_SIZE: usize = 10 * 1024 * 1024;
@@ -380,16 +381,17 @@ pub(crate) fn get_async(
 #[pyo3(signature = (store, path, *, start, end=None, length=None))]
 pub(crate) fn get_range(
     py: Python,
-    store: PyObjectStore,
+    store: &Bound<PyAny>,
     path: PyPath,
     start: u64,
     end: Option<u64>,
     length: Option<u64>,
 ) -> PyObjectStoreResult<pyo3_bytes::PyBytes> {
-    let runtime = get_runtime();
+    let local = store.cast::<PyLocalStore>().is_ok();
+    let store: PyObjectStore = store.extract()?;
     let range = params_to_range(start, end, length)?;
     py.detach(|| {
-        let out = runtime.block_on(store.as_ref().get_range(path.as_ref(), range))?;
+        let out = block_on(local, store.as_ref().get_range(path.as_ref(), range))?;
         Ok::<_, PyObjectStoreError>(pyo3_bytes::PyBytes::new(out))
     })
 }
@@ -449,16 +451,17 @@ async fn _get_ranges(
 #[pyo3(signature = (store, path, *, starts, ends=None, lengths=None, coalesce=OBJECT_STORE_COALESCE_DEFAULT))]
 pub(crate) fn get_ranges(
     py: Python,
-    store: PyObjectStore,
+    store: &Bound<PyAny>,
     path: PyPath,
     starts: Vec<u64>,
     ends: Option<Vec<u64>>,
     lengths: Option<Vec<u64>>,
     coalesce: u64,
 ) -> PyObjectStoreResult<Vec<PyBytes>> {
-    let runtime = get_runtime();
+    let local = store.cast::<PyLocalStore>().is_ok();
+    let store: PyObjectStore = store.extract()?;
     let ranges = params_to_ranges(starts, ends, lengths)?;
-    py.detach(|| runtime.block_on(_get_ranges(store, path, &ranges, coalesce)))
+    py.detach(|| block_on(local, _get_ranges(store, path, &ranges, coalesce)))
 }
 
 #[pyfunction]

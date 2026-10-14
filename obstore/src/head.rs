@@ -1,17 +1,17 @@
 use object_store::ObjectStoreExt;
 use pyo3::prelude::*;
-use pyo3_async_runtimes::tokio::get_runtime;
-use pyo3_object_store::{PyObjectStore, PyObjectStoreError, PyObjectStoreResult, PyPath};
+use pyo3_object_store::{PyLocalStore, PyObjectStore, PyObjectStoreError, PyObjectStoreResult, PyPath};
 
 use crate::list::PyObjectMeta;
+use crate::utils::block_on;
 
 #[pyfunction]
-pub fn head(py: Python, store: PyObjectStore, path: PyPath) -> PyObjectStoreResult<PyObjectMeta> {
-    let runtime = get_runtime();
-    let store = store.into_inner();
+pub fn head(py: Python, store: &Bound<PyAny>, path: PyPath) -> PyObjectStoreResult<PyObjectMeta> {
+    let local = store.cast::<PyLocalStore>().is_ok();
+    let store = store.extract::<PyObjectStore>()?.into_inner();
 
     py.detach(|| {
-        let meta = runtime.block_on(store.head(path.as_ref()))?;
+        let meta = block_on(local, store.head(path.as_ref()))?;
         Ok::<_, PyObjectStoreError>(PyObjectMeta::new(meta))
     })
 }
